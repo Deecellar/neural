@@ -23,25 +23,21 @@ pub const NeuralNetwork = struct {
     }
     pub fn forward(self: *NeuralNetwork, inputs: []f64) ![]f64 {
         self.previousInputs = inputs;
-        var arena = std.heap.ArenaAllocator.init(self.allocator);
-        defer arena.deinit();
         var outputs: []f64 = inputs;
         for (self.layer.items) |*lay| {
-            outputs = try lay.forward(arena.allocator(), outputs);
-            outputs = try activation_algorithmn.reluDerivative(arena.allocator(), outputs);
+            outputs = try lay.forward(self.arena.allocator(), outputs);
+            outputs = try activation_algorithmn.reluDerivative(self.arena.allocator(), outputs);
         }
         self.outputs = outputs;
         return outputs;
     }
     pub fn backward(self: *NeuralNetwork, targets: []f64) !void {
         var current_loss = targets;
-        var arena = std.heap.ArenaAllocator.init(self.allocator);
-        defer arena.deinit();
         var index: usize = 0;
         while (index < self.layer.items.len) {
             var lay = self.layer.items[self.layer.items.len - index - 1];
-            current_loss = try lay.backward(arena.allocator(), current_loss);
-            current_loss = try activation_algorithmn.reluDerivative(arena.allocator(), current_loss);
+            current_loss = try lay.backward(self.arena.allocator(), current_loss);
+            current_loss = try activation_algorithmn.reluDerivative(self.arena.allocator(), current_loss);
             index += 1;
         }
         self.loss.clearRetainingCapacity();
@@ -54,13 +50,10 @@ pub const NeuralNetwork = struct {
     }
 
     pub fn train(self: *NeuralNetwork, inputs: [][]f64, targets: [][]f64, epochs: usize, delta: f64) !void {
-        var arena = std.heap.ArenaAllocator.init(self.allocator);
-        @breakpoint();
-        defer arena.deinit();
         for (0..epochs) |_| {
             for (inputs, 0..) |input, target| {
                 var outputs = try self.forward(input);
-                var lossing = try loss.huberLoss(arena.allocator(), outputs, targets[target], delta);
+                var lossing = try loss.huberLoss(self.arena.allocator(), outputs, targets[target], delta);
                 try self.backward(lossing);
                 self.update();
             }

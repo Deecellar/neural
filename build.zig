@@ -3,6 +3,7 @@ const data_gen = @import("src/data_gen.zig");
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
+const data = [_]usize{ 100, 500, 1000, 2000, 5000, 10000, 20000, 50000};
 pub fn build(b: *std.Build) void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
@@ -24,6 +25,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const options = b.addOptions();
+    options.addOption(@TypeOf(data), "data", data);
+    exe.addOptions("build_options", options);
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
@@ -38,7 +42,7 @@ pub fn build(b: *std.Build) void {
             std.log.warn("Error creating data directory: {}\n", .{err});
             @panic("Failed to create data directory.");
         };
-        inline for (.{ 100, 500, 1000, 2000, 5000, 10000 }) |d| {
+        inline for (data) |d| {
             data_gen.generateData(d, "data") catch |err| {
                 std.log.warn("Error generating data: {}\n", .{err});
                 @panic("Failed to generate data.");

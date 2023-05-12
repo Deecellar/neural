@@ -8,7 +8,7 @@
             "name": "lldb",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/zig-out/bin/neural.exe",
+            "program": "${workspaceFolder}/zig-out/bin/neural",
             "args": [],
             "cwd": "${workspaceFolder}"
         },
