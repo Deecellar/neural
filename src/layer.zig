@@ -51,7 +51,7 @@ pub const Layer = struct {
 
     pub fn update(self: *Layer, input: []f64) void {
         for (self.weights, 0..) |*w, i| {
-            w.* -= 0.01 * input[i];
+            w.* -= @import("root").learning_rate * input[i];
         }
     }
 };

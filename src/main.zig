@@ -2,6 +2,7 @@ const std = @import("std");
 const csv = @import("csv_parser.zig");
 const neural_network = @import("neural_network.zig");
 const build_options = @import("build_options");
+pub const learning_rate = 0.1;
 pub fn main() !void {
     var process_dir = dir: {
         var process = try std.process.argsWithAllocator(std.heap.page_allocator);
@@ -20,6 +21,11 @@ pub fn main() !void {
     var stdout_buffered = stdout_buffered_file.writer();
     var file_buffer: [4 * 1024 * 1024]u8 = undefined;
     var experiment: [build_options.data.len]Experiment = undefined;
+    // We create a file where we save the results
+    var result_file = try files.createFile("result.csv", .{});
+    defer result_file.close();
+    var result_writer = result_file.writer();
+    try result_writer.writeAll("neural_network_type, data_set_size, training_split,training_time(ns),error, mem_usage, learning_rate\n");
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
     defer if (gpa.deinit() == .leak) std.log.warn("Memory leak detected\n", .{});
@@ -61,13 +67,14 @@ pub fn main() !void {
                     .result = data.result,
                 });
             }
-            experiment[i] = Experiment.init(try input.toOwnedSlice(), try output.toOwnedSlice(), 0.8);
+            experiment[i] = Experiment.init(try input.toOwnedSlice(), try output.toOwnedSlice(), 0.7);
         }
     }
     var nn = try neural_network.NeuralNetwork.init(gpa.allocator());
     try nn.addLayer(5, 5);
-    try nn.addLayer(5, 3);
-    try nn.addLayer(3, 1);
+    try nn.addLayer(5, 2);
+    try nn.addLayer(2, 1);
+    var last_mem : f64 = 0;
     if (nn.validate()) {
         for (experiment) |e| {
             var ff: std.ArrayList([]f64) = std.ArrayList([]f64).init(gpa.allocator());
@@ -88,7 +95,9 @@ pub fn main() !void {
                 data[0] = d.result;
                 try fl.append(data);
             }
+            var timer = try std.time.Timer.start();
             try nn.train(try ff.toOwnedSlice(), try fl.toOwnedSlice(), 1000, 0.1);
+            var elapsed = timer.lap();
             for (e.testing.testing_data) |d| {
                 var data = try gpa.allocator().alloc(f64, 5);
                 data[0] = d.d1;
@@ -116,9 +125,40 @@ pub fn main() !void {
             err /= @intToFloat(f64, e.inputs.len);
             err *= 100.0;
             try stdout_buffered.print("Error for {d} data points: {d}%\n", .{ e.inputs.len, err });
-            // We calculate the percentage of error
-
+            // We calculate the Max memory the program used
+            if (@import("builtin").os.tag == .linux) {
+                var file = try files.openFile("/proc/self/status", .{});
+                defer file.close();
+                var data_read = try file.readAll(&file_buffer);
+                var data = file_buffer[0..data_read];
+                var parse = std.mem.tokenize(u8, data, "\n");
+                while (parse.next()) |line| {
+                    var tokens = std.mem.tokenize(u8, line, ":");
+                    if (tokens.next()) |token| {
+                        if (std.mem.eql(u8, token, "VmPeak")) {
+                            if (tokens.next()) |tok| {
+                                var mem = try std.fmt.parseFloat(f64, std.mem.trim(u8, tok, "\t kB"));
+                                var divisor : f32 = 1024; 
+                                var symbol = "MB";
+                                if(mem > 1024 * 1024) {
+                                    divisor = 1024 * 1024;
+                                    symbol = "GB";
+                                } 
+                                try stdout_buffered.print("Max memory used: {d} {s}\n", .{ (mem - last_mem) / divisor, symbol });
+                                last_mem = mem;
+                            }
+                        }
                     }
+                }
+            }
+            // If elapsed is in the realm of ms, we print it in ms, elapsed is in ns
+            if (elapsed < 1000000) {
+                try stdout_buffered.print("Elapsed time: {d} ms\n", .{ elapsed / std.time.ns_per_ms });
+            } else {
+                try stdout_buffered.print("Elapsed time: {d} s\n", .{ elapsed / std.time.ns_per_s });
+            }
+            try result_writer.print("relu+huberloss+5.5.4.2.1,{d},{d},{d},\"{d}\",{d},\"{d}\"\n", .{e.inputs.len,0.8,elapsed,err,last_mem,learning_rate});
+        }
     }
     try stdout_buffered_file.flush();
 }
