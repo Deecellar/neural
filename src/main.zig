@@ -4,15 +4,17 @@ const neural_network = @import("neural_network.zig");
 const build_options = @import("build_options");
 pub const learning_rate = 0.1;
 pub fn main() !void {
-    var process_dir = dir: {
-        var process = try std.process.argsWithAllocator(std.heap.page_allocator);
-        defer process.deinit();
-        var exe_path = process.next() orelse return error.FileNotFound;
-        var exe_dir = std.fs.path.dirname(exe_path) orelse return error.FileNotFound;
-        break :dir try std.mem.concat(std.heap.page_allocator, u8, &.{ exe_dir, "/data" });
-    };
-    var files = try std.fs.openDirAbsolute(process_dir, .{});
-    std.heap.page_allocator.free(process_dir);
+    {
+        // We get the current executable path via cwd and argv[0]
+        var exe_cwd = std.fs.cwd();
+        var args = try std.process.argsWithAllocator(std.heap.page_allocator);
+        defer args.deinit();
+        var exe_arg = args.next() orelse return error.FileNotFound;
+        var exe_dir = try exe_cwd.openDir(std.fs.path.dirname(exe_arg) orelse ".", .{});
+        defer exe_dir.close();
+        try exe_dir.setAsCwd();
+    }
+    var files = std.fs.cwd();
     defer files.close();
     var stdout_file = std.io.getStdOut();
     defer stdout_file.close();
@@ -41,7 +43,7 @@ pub fn main() !void {
         defer data_list.deinit();
         inline for (build_options.data, 0..) |v, i| {
             {
-                var file_name = std.fmt.comptimePrint("data_r{d}.csv", .{v});
+                var file_name = std.fmt.comptimePrint("data/data_r{d}.csv", .{v});
                 var file = try files.openFile(file_name, .{});
                 defer file.close();
                 var data_read = try file.readAll(&file_buffer);
@@ -74,7 +76,7 @@ pub fn main() !void {
     try nn.addLayer(5, 5);
     try nn.addLayer(5, 2);
     try nn.addLayer(2, 1);
-    var last_mem : f64 = 0;
+    var last_mem: f64 = 0;
     if (nn.validate()) {
         for (experiment) |e| {
             var ff: std.ArrayList([]f64) = std.ArrayList([]f64).init(gpa.allocator());
@@ -116,6 +118,7 @@ pub fn main() !void {
             // We calculate the error
             var err: f64 = 0.0;
             for (result, 0..) |r, i| {
+                // This is the standard error via the mean of the square error
                 err += (r[0] - fl.items[i][0]) * (r[0] - fl.items[i][0]);
             }
             err /= @intToFloat(f64, result.len);
@@ -138,12 +141,12 @@ pub fn main() !void {
                         if (std.mem.eql(u8, token, "VmPeak")) {
                             if (tokens.next()) |tok| {
                                 var mem = try std.fmt.parseFloat(f64, std.mem.trim(u8, tok, "\t kB"));
-                                var divisor : f32 = 1024; 
+                                var divisor: f32 = 1024;
                                 var symbol = "MB";
-                                if(mem > 1024 * 1024) {
+                                if (mem > 1024 * 1024) {
                                     divisor = 1024 * 1024;
                                     symbol = "GB";
-                                } 
+                                }
                                 try stdout_buffered.print("Max memory used: {d} {s}\n", .{ (mem - last_mem) / divisor, symbol });
                                 last_mem = mem;
                             }
@@ -153,11 +156,11 @@ pub fn main() !void {
             }
             // If elapsed is in the realm of ms, we print it in ms, elapsed is in ns
             if (elapsed < 1000000) {
-                try stdout_buffered.print("Elapsed time: {d} ms\n", .{ elapsed / std.time.ns_per_ms });
+                try stdout_buffered.print("Elapsed time: {d} ms\n", .{elapsed / std.time.ns_per_ms});
             } else {
-                try stdout_buffered.print("Elapsed time: {d} s\n", .{ elapsed / std.time.ns_per_s });
+                try stdout_buffered.print("Elapsed time: {d} s\n", .{elapsed / std.time.ns_per_s});
             }
-            try result_writer.print("relu+huberloss+5.5.4.2.1,{d},{d},{d},\"{d}\",{d},\"{d}\"\n", .{e.inputs.len,0.8,elapsed,err,last_mem,learning_rate});
+            try result_writer.print("relu+huberloss+5.5.4.2.1,{d},{d},{d},\"{d}\",{d},\"{d}\"\n", .{ e.inputs.len, 0.8, elapsed, err, last_mem, learning_rate });
         }
     }
     try stdout_buffered_file.flush();
