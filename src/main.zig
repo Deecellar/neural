@@ -24,11 +24,14 @@ pub fn main() !void {
     var file_buffer: [4 * 1024 * 1024]u8 = undefined;
     var experiment: [build_options.data.len]Experiment = undefined;
     // We create a file where we save the results
-    var result_file = try files.createFile("result.csv", .{});
+    var buffer: ["result.csv".len + std.math.log10(std.math.maxInt(u64)) + 2]u8 = undefined;
+    var result_file = try files.createFile(std.fmt.bufPrint(&buffer, "result-{d}.csv", .{std.time.timestamp()}) catch unreachable, .{});
     defer result_file.close();
     var result_writer = result_file.writer();
     try result_writer.writeAll("neural_network_type, data_set_size, training_split,training_time(ns),error, mem_usage, learning_rate\n");
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){
+        .backing_allocator = std.heap.c_allocator,
+    };
 
     defer if (gpa.deinit() == .leak) std.log.warn("Memory leak detected\n", .{});
     defer for (experiment) |exp| {
@@ -64,6 +67,11 @@ pub fn main() !void {
                     .d3 = data.d3,
                     .d4 = data.d4,
                     .d5 = data.d5,
+                    .d6 = data.d6,
+                    .d7 = data.d7,
+                    .d8 = data.d8,
+                    .d9 = data.d9,
+                    .d10 = data.d10,
                 });
                 try output.append(Output{
                     .result = data.result,
@@ -73,9 +81,9 @@ pub fn main() !void {
         }
     }
     var nn = try neural_network.NeuralNetwork.init(gpa.allocator());
-    try nn.addLayer(5, 5);
-    try nn.addLayer(5, 2);
-    try nn.addLayer(2, 1);
+    try nn.addLayer(10, 10);
+    try nn.addLayer(10, 25);
+    try nn.addLayer(25, 1);
     var last_mem: f64 = 0;
     if (nn.validate()) {
         for (experiment) |e| {
@@ -83,8 +91,11 @@ pub fn main() !void {
             var fl: std.ArrayList([]f64) = std.ArrayList([]f64).init(gpa.allocator());
             defer ff.deinit();
             defer fl.deinit();
+            var experiment_arena = std.heap.ArenaAllocator.init(gpa.allocator());
+            defer experiment_arena.deinit();
+
             for (e.training.training_data) |d| {
-                var data = try gpa.allocator().alloc(f64, 5);
+                var data = try experiment_arena.allocator().alloc(f64, 5);
                 data[0] = d.d1;
                 data[1] = d.d2;
                 data[2] = d.d3;
@@ -93,7 +104,7 @@ pub fn main() !void {
                 try ff.append(data);
             }
             for (e.training.training_labels) |d| {
-                var data = try gpa.allocator().alloc(f64, 1);
+                var data = try experiment_arena.allocator().alloc(f64, 1);
                 data[0] = d.result;
                 try fl.append(data);
             }
@@ -101,7 +112,7 @@ pub fn main() !void {
             try nn.train(try ff.toOwnedSlice(), try fl.toOwnedSlice(), 1000, 0.1);
             var elapsed = timer.lap();
             for (e.testing.testing_data) |d| {
-                var data = try gpa.allocator().alloc(f64, 5);
+                var data = try experiment_arena.allocator().alloc(f64, 5);
                 data[0] = d.d1;
                 data[1] = d.d2;
                 data[2] = d.d3;
@@ -110,7 +121,7 @@ pub fn main() !void {
                 try ff.append(data);
             }
             for (e.testing.testing_labels) |d| {
-                var data = try gpa.allocator().alloc(f64, 1);
+                var data = try experiment_arena.allocator().alloc(f64, 1);
                 data[0] = d.result;
                 try fl.append(data);
             }
@@ -160,7 +171,7 @@ pub fn main() !void {
             } else {
                 try stdout_buffered.print("Elapsed time: {d} s\n", .{elapsed / std.time.ns_per_s});
             }
-            try result_writer.print("relu+huberloss+5.5.4.2.1,{d},{d},{d},\"{d}\",{d},\"{d}\"\n", .{ e.inputs.len, 0.8, elapsed, err, last_mem, learning_rate });
+            try result_writer.print("radial+randomSamples+10.20.1,{d},{d},{d},\"{d}\",{d},\"{d}\"\n", .{ e.inputs.len, 0.8, elapsed, err, last_mem, learning_rate });
         }
     }
     try stdout_buffered_file.flush();
@@ -172,6 +183,11 @@ pub const Data = struct {
     d3: f64,
     d4: f64,
     d5: f64,
+    d6: f64,
+    d7: f64,
+    d8: f64,
+    d9: f64,
+    d10: f64,
     result: f64,
 };
 
@@ -181,6 +197,11 @@ pub const Input = struct {
     d3: f64,
     d4: f64,
     d5: f64,
+    d6: f64,
+    d7: f64,
+    d8: f64,
+    d9: f64,
+    d10: f64,
 };
 
 pub const Output = struct {

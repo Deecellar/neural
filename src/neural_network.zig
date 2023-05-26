@@ -24,24 +24,31 @@ pub const NeuralNetwork = struct {
     pub fn forward(self: *NeuralNetwork, inputs: []f64) ![]f64 {
         self.previousInputs = inputs;
         var outputs: []f64 = inputs;
+        var local_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        defer local_arena.deinit();
+        // We activate our radial neural network
         for (self.layer.items) |*lay| {
-            outputs = try lay.forward(self.arena.allocator(), outputs);
-            outputs = try activation_algorithmn.reluDerivative(self.arena.allocator(), outputs);
+            outputs = try lay.forward(local_arena.allocator(), outputs);
+            var centers = try activation_algorithmn.center(local_arena.allocator(), outputs);
+            outputs = try activation_algorithmn.gaussianRadialBasisDerivative(local_arena.allocator(), outputs, centers, lay.weights);
         }
-        self.outputs = outputs;
+        self.outputs = try self.arena.allocator().dupe(f64, outputs);
         return outputs;
     }
     pub fn backward(self: *NeuralNetwork, targets: []f64) !void {
         var current_loss = targets;
         var index: usize = 0;
+        var local_arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer local_arena.deinit();
         while (index < self.layer.items.len) {
             var lay = self.layer.items[self.layer.items.len - index - 1];
-            current_loss = try lay.backward(self.arena.allocator(), current_loss);
-            current_loss = try activation_algorithmn.reluDerivative(self.arena.allocator(), current_loss);
+            current_loss = try lay.backward(local_arena.allocator(), current_loss);
+            var centers = try activation_algorithmn.center(local_arena.allocator(), self.previousInputs);
+            current_loss = try activation_algorithmn.gaussianRadialBasisDerivative(local_arena.allocator(), current_loss, centers, lay.weights);
             index += 1;
         }
         self.loss.clearRetainingCapacity();
-        try self.loss.appendSlice(self.allocator, current_loss);
+        try self.loss.appendSlice(self.arena.allocator(), current_loss);
     }
     pub fn update(self: *NeuralNetwork) void {
         for (self.layer.items) |*lay| {

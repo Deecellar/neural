@@ -1,7 +1,7 @@
 //! A neural network layer
 
 const std = @import("std");
-
+const algos = @import("algorithmn.zig");
 pub const Layer = struct {
     weights: []f64,
     input_gradients: []f64 = undefined,
@@ -24,7 +24,7 @@ pub const Layer = struct {
         for (0..self.output) |i| {
             var sum: f64 = 0.0;
             for (0..self.input) |j| {
-                sum += input[j] * self.weights[i * self.input + j];
+                sum += input[j % input.len] * self.weights[i * self.input + j];
             }
             outputs[i] = sum;
         }

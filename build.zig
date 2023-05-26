@@ -3,7 +3,7 @@ const data_gen = @import("src/data_gen.zig");
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
-const data = [_]usize{ 100, 500, 1000, 2000, 5000, 10000, 20000, 50000};
+const data = [_]usize{ 100, 500, 1000, 2000, 5000, 10000 };
 pub fn build(b: *std.Build) void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
@@ -17,13 +17,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "neural",
+        .name = "neural_radial",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
+    exe.linkLibC();
 
     const options = b.addOptions();
     options.addOption(@TypeOf(data), "data", data);

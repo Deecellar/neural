@@ -12,28 +12,19 @@ pub fn generateData(comptime rows: usize, comptime path_prefix: []const u8) !voi
     var file_name = std.fmt.comptimePrint("data_r{d}.csv", .{rows});
     var file = try std.fs.cwd().createFile(path_prefix ++ "/" ++ file_name, .{});
     defer file.close();
-    try file.writeAll("d1,d2,d3,d4,d5,result\n");
+    try file.writeAll("d1,d2,d3,d4,d5,d6,d7,d8,d9,d10,result\n");
     var random_interface = random.random();
     for (0..rows) |_| {
-        var d1 = random_interface.float(f64) * 1000.0 - 500.0;
-        var d2 = random_interface.float(f64) * 1000.0 - 500.0;
-        var d3 = random_interface.float(f64) * 1000.0 - 500.0;
-        var d4 = random_interface.float(f64) * 1000.0 - 500.0;
-        var d5 = random_interface.float(f64) * 1000.0 - 500.0;
-        var result: f64 = 418.9829 * 5.0;
+        var dat: [10]f64 = undefined;
+        for (&dat) |*d| {
+            d.* = random_interface.float(f64) * 1000.0 - 500.0;
+        }
+        var result: f64 = 418.9829 * @intToFloat(f64, dat.len);
         var sum: f64 = 0.0;
-        inline for (0..5) |i| {
-            var d = switch (i) {
-                0 => d1,
-                1 => d2,
-                2 => d3,
-                3 => d4,
-                4 => d5,
-                else => 0.0,
-            };
-            sum += d * @sin(@sqrt(@fabs(d)));
+        inline for (0..dat.len) |i| {
+            sum += dat[i] * @sin(@sqrt(@fabs(dat[i])));
         }
         result -= sum;
-        try file.writer().print("{d},{d},{d},{d},{d},{d}\n", .{ d1, d2, d3, d4, d5, result });
+        try file.writer().print("{d},{d},{d},{d},{d},{d},{d},{d},{d},{d},{d}\n", .{ dat[0], dat[1], dat[2], dat[3], dat[4], dat[5], dat[6], dat[7], dat[8], dat[9], result });
     }
 }
